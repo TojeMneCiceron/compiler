@@ -7,6 +7,48 @@ using namespace std;
 
 ifstream input("program.txt");
 
+enum KeyWords {
+    varSy,
+    beginSy, endSy,
+    andSy, orSy, notSy, lessSy, moreSy, lessEvenSy, moreEvenSy, notEvenSy,
+    assignSy, plusSy, minusSy, multSy, subSy,
+    leftBrSy, rightBrSy,
+    ifSy, elseSy,
+    whileSy, doSy,
+    quotSy, colonSy, semiColonSy, dotSy,
+};
+
+map<string, int> keywords
+{
+    {"var", varSy},
+    {"begin", beginSy},
+    {"end", endSy},
+    {"and", andSy},
+    {"or", orSy},
+    {"not", notSy},
+    {"<", lessSy},
+    {">", moreSy},
+    {"<=", lessEvenSy},
+    {">=", moreEvenSy},
+    {"<>", notEvenSy},
+    {":=", assignSy},
+    {"+", plusSy},
+    {"-", minusSy},
+    {"*", multSy},
+    {"/", subSy},
+    {"(", leftBrSy},
+    {")", rightBrSy},
+    {"if", ifSy},
+    {"else", elseSy},
+    {"while", whileSy},
+    {"do", doSy},
+    {"\"", quotSy},
+    {":", colonSy},
+    {";", semiColonSy},
+    {".", dotSy},
+};
+
+
 class CTextPosition {
 private:
     int line_number;
@@ -29,18 +71,16 @@ class CioModule {
 private:
     string buffer;
     int cur_ch;
-    int cur_line;
 public:
     char nextch()
-    { 
+    {
         if (cur_ch == buffer.size() && input.eof())
             return NULL;
         if (cur_ch == buffer.size() && !input.eof())
         {
             getline(input, buffer);
             cur_ch = 0;
-            cur_line++;
-        }        
+        }
         cur_ch++;
         return buffer[cur_ch - 1];
     }
@@ -62,19 +102,13 @@ int main() {
     auto io = new CioModule();
     //CTokenPtr token = nullptr;
     auto lexer = new CLexer();
-    char ch;
 
-    while (ch = io->nextch())
+    char ch;
+    while (ch = lexer->getNextToken(io))
     {
         //cout << token->ToString();
         cout << ch << endl;
     }
-
-    //while (ch = lexer->getNextToken(io))
-    //{
-    //    //cout << token->ToString();
-    //    cout << ch;
-    //}
 
     cout << "d o n e";
 
