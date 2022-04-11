@@ -5,7 +5,7 @@
 #include <fstream>
 using namespace std;
 
-ifstream input("program.txt");
+ifstream input("program.pas");
 
 enum KeyWords {
     varSy,
@@ -16,9 +16,10 @@ enum KeyWords {
     ifSy, elseSy,
     whileSy, doSy,
     quotSy, colonSy, semiColonSy, dotSy,
+    intSy, realSy, strSy, boolSy
 };
 
-map<string, int> keywords
+map<string, KeyWords> keywords
 {
     {"var", varSy},
     {"begin", beginSy},
@@ -45,9 +46,116 @@ map<string, int> keywords
     {"\"", quotSy},
     {":", colonSy},
     {";", semiColonSy},
-    {".", dotSy},
+    {"integer", intSy},
+    {"real", realSy},
+    {"string", strSy},
+    {"Boolean", boolSy},
 };
 
+#define DECL_PTR(ClassName) using ClassName ## Ptr = unique_ptr<ClassName>;
+
+#define PURE = 0
+enum TokenType {
+    ttIdent,
+    ttKeyword,
+    ttConst
+};
+
+class CToken {
+private:
+    TokenType tType;
+public:
+    CToken(TokenType _type) {}
+    TokenType getType() { return tType; };
+    virtual string ToString() PURE;
+};
+
+typedef CToken* CTokenPtr;
+//DECL_PTR(CToken);
+
+class CIdentToken : public CToken
+{
+private:
+    string ident;
+public:
+    CIdentToken(string _ident): CToken(ttIdent), ident(_ident) {}
+    string ToString() 
+    {
+        return ident;
+    }
+};
+typedef CIdentToken* CIdentTokenPtr;
+//DECL_PTR(CIdentToken);
+
+class CKeywordToken : public CToken
+{
+private:
+    string keyword;
+public:
+    CKeywordToken(string _keyword) : CToken(ttKeyword), keyword(_keyword) {}
+    string ToString()
+    {
+        return keyword;
+    }
+};
+typedef CKeywordToken* CKeywordTokenPtr;
+//DECL_PTR(CKeywordToken);
+
+class CIntConstToken : public CToken
+{
+private:
+    int value;
+public:
+    CIntConstToken(int val) : CToken(ttConst), value(val) {}
+    string ToString()
+    {
+        return to_string(value);
+    }
+};
+typedef CIntConstToken* CIntConstTokenPtr;
+//DECL_PTR(CIntConstToken);
+
+class CRealConstToken : public CToken
+{
+private:
+    double value;
+public:
+    CRealConstToken(double val) : CToken(ttConst), value(val) {}
+    string ToString()
+    {
+        return to_string(value);
+    }
+};
+typedef CRealConstToken* CRealConstTokenPtr;
+//DECL_PTR(CRealConstToken);
+
+class CStringConstToken : public CToken
+{
+private:
+    string value;
+public:
+    CStringConstToken(string val) : CToken(ttConst), value(val) {}
+    string ToString()
+    {
+        return value;
+    }
+};
+typedef CStringConstToken* CStringConstTokenPtr;
+//DECL_PTR(CStringConstToken);
+
+class CBoolConstToken : public CToken
+{
+private:
+    bool value;
+public:
+    CBoolConstToken(bool val) : CToken(ttConst), value(val) {}
+    string ToString()
+    {
+        return value ? "true" : "false";
+    }
+};
+typedef CBoolConstToken* CBoolConstTokenPtr;
+//DECL_PTR(CBoolConstToken);
 
 class CTextPosition {
 private:
@@ -80,6 +188,7 @@ public:
         {
             getline(input, buffer);
             cur_ch = 0;
+            return '\n';
         }
         cur_ch++;
         return buffer[cur_ch - 1];
@@ -89,25 +198,123 @@ public:
 //DECL_PTR(CioModule);
 
 class CLexer {
-    //...
+private:
+    char cur_ch;
 public:
-    //CTokenPtr getNextToken(CioModule* io);
-    char getNextToken(CioModule* io)
+    CTokenPtr getNextToken(CioModule* io)
     {
-        return io->nextch();
+        if (!cur_ch || cur_ch == '\n' || cur_ch == ' ')
+            cur_ch = io->nextch();
+
+        if (!cur_ch)
+            return nullptr;
+        
+        string next_t = "";
+
+        if (cur_ch >= 'a' && cur_ch <= 'z' ||
+            cur_ch >= 'A' && cur_ch <= 'Z')
+        {
+            while (cur_ch >= 'a' && cur_ch <= 'z' ||
+                cur_ch >= 'A' && cur_ch <= 'Z' ||
+                cur_ch >= '0' && cur_ch <= '9')
+            {
+                next_t += cur_ch;
+                cur_ch = io->nextch();
+            }
+
+            if (next_t == "true")
+                return new CBoolConstToken(true);
+            if (next_t == "false")
+                return new CBoolConstToken(false);
+
+            if (keywords.count(next_t) != 0)
+                return new CKeywordToken(next_t);
+
+            return new CIdentToken(next_t);
+        }
+        if (cur_ch >= '0' && cur_ch <= '9')
+        {
+            while (cur_ch >= '0' && cur_ch <= '9' || cur_ch == '.')
+            {
+                next_t += cur_ch;
+                cur_ch = io->nextch();
+            }
+
+            if (next_t.find('.') == string::npos)
+                return new CIntConstToken(stoi(next_t));
+            else
+                return new CRealConstToken(stod(next_t));
+        }
+
+        next_t += cur_ch;
+        //cur_ch = io->nextch();
+
+        switch (cur_ch)
+        {
+        case ':':
+            cur_ch = io->nextch();
+            if (cur_ch == '=')
+            {
+                next_t += cur_ch;
+                cur_ch = io->nextch();
+            }
+            return new CKeywordToken(next_t);
+        case '<':
+            cur_ch = io->nextch();
+            if (cur_ch == '=')
+            {
+                next_t += cur_ch;
+                cur_ch = io->nextch();
+            }
+            return new CKeywordToken(next_t);
+        case '>':
+            cur_ch = io->nextch();
+            if (cur_ch == '=')
+            {
+                next_t += cur_ch;
+                cur_ch = io->nextch();
+            }
+            return new CKeywordToken(next_t);
+        case '\"':
+            cur_ch = io->nextch();
+            while (cur_ch != '\"')
+            {
+                next_t += cur_ch;
+                cur_ch = io->nextch();
+            }
+            next_t += cur_ch;
+            cur_ch = io->nextch();
+            return new CStringConstToken(next_t);
+       /* case ';':
+            cur_ch = io->nextch();
+            return next_t;*/
+
+        default:
+            cur_ch = io->nextch();
+            return new CKeywordToken(next_t);
+        }
+
+        //return next_t;
     };
 };
 
 int main() {
     auto io = new CioModule();
-    //CTokenPtr token = nullptr;
+    CTokenPtr token = nullptr;
     auto lexer = new CLexer();
+    //string ch;
+    //ch = lexer->getNextToken(io);
 
-    char ch;
-    while (ch = lexer->getNextToken(io))
+    //while (ch != "")
+    //{
+    //    //cout << token->ToString();
+    //    cout << ch << endl;
+    //    ch = lexer->getNextToken(io);
+    //}
+
+    while (token = lexer->getNextToken(io))
     {
-        //cout << token->ToString();
-        cout << ch << endl;
+        cout << token->ToString() << endl;
     }
 
     cout << "d o n e";
