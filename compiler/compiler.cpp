@@ -7,53 +7,56 @@ using namespace std;
 
 ifstream input("program.pas");
 
-enum KeyWords {
+enum class KeyWords {
     varSy,
     beginSy, endSy,
     andSy, orSy, notSy, lessSy, moreSy, lessEvenSy, moreEvenSy, notEvenSy,
     assignSy, plusSy, minusSy, multSy, subSy,
     leftBrSy, rightBrSy,
-    ifSy, elseSy,
+    ifSy, thenSy, elseSy,
     whileSy, doSy,
-    quotSy, colonSy, semiColonSy, dotSy,
+    quotSy, colonSy, semiColonSy, dotSy, commaSy,
     programSy,
 };
 
 map<string, KeyWords> keywords
 {
-    {"var", varSy},
-    {"begin", beginSy},
-    {"end", endSy},
-    {"and", andSy},
-    {"or", orSy},
-    {"not", notSy},
-    {"<", lessSy},
-    {">", moreSy},
-    {"<=", lessEvenSy},
-    {">=", moreEvenSy},
-    {"<>", notEvenSy},
-    {":=", assignSy},
-    {"+", plusSy},
-    {"-", minusSy},
-    {"*", multSy},
-    {"/", subSy},
-    {"(", leftBrSy},
-    {")", rightBrSy},
-    {"if", ifSy},
-    {"else", elseSy},
-    {"while", whileSy},
-    {"do", doSy},
-    {"\"", quotSy},
-    {":", colonSy},
-    {";", semiColonSy},
-    {"program", programSy}
+    {"var", KeyWords::varSy},
+    {"begin", KeyWords::beginSy},
+    {"end", KeyWords::endSy},
+    {"and", KeyWords::andSy},
+    {"or", KeyWords::orSy},
+    {"not", KeyWords::notSy},
+    {"<", KeyWords::lessSy},
+    {">", KeyWords::moreSy},
+    {"<=", KeyWords::lessEvenSy},
+    {">=", KeyWords::moreEvenSy},
+    {"<>", KeyWords::notEvenSy},
+    {":=", KeyWords::assignSy},
+    {"+", KeyWords::plusSy},
+    {"-", KeyWords::minusSy},
+    {"*", KeyWords::multSy},
+    {"/", KeyWords::subSy},
+    {"(", KeyWords::leftBrSy},
+    {")", KeyWords::rightBrSy},
+    {"if", KeyWords::ifSy},
+    {"then", KeyWords::thenSy},
+    {"else", KeyWords::elseSy},
+    {"while", KeyWords::whileSy},
+    {"do", KeyWords::doSy},
+    {"\"", KeyWords::quotSy},
+    {":", KeyWords::colonSy},
+    {";", KeyWords::semiColonSy},
+    {".", KeyWords::dotSy},
+    {",", KeyWords::commaSy},
+    {"program", KeyWords::programSy}
 };
 
 
 #define DECL_PTR(ClassName) using ClassName ## Ptr = unique_ptr<ClassName>;
 
 #define PURE = 0
-enum TokenType {
+enum class TokenType {
     ttIdent,
     ttKeyword,
     ttConst
@@ -63,7 +66,7 @@ class CToken {
 private:
     TokenType tType;
 public:
-    CToken(TokenType _type) {}
+    CToken(TokenType _type) { tType = _type; }
     TokenType getType() { return tType; };
     virtual string ToString() PURE;
 };
@@ -76,7 +79,7 @@ class CIdentToken : public CToken
 private:
     string ident;
 public:
-    CIdentToken(string _ident): CToken(ttIdent), ident(_ident) {}
+    CIdentToken(string _ident): CToken(TokenType::ttIdent), ident(_ident) {}
     string ToString() 
     {
         return ident;
@@ -91,7 +94,7 @@ private:
     string keyword;
     KeyWords code;
 public:
-    CKeywordToken(string _keyword) : CToken(ttKeyword), keyword(_keyword), code(keywords[_keyword]) {}
+    CKeywordToken(string _keyword) : CToken(TokenType::ttKeyword), keyword(_keyword), code(keywords[_keyword]) {}
     KeyWords getCode()
     {
         return code;
@@ -109,7 +112,7 @@ class CIntConstToken : public CToken
 private:
     int value;
 public:
-    CIntConstToken(int val) : CToken(ttConst), value(val) {}
+    CIntConstToken(int val) : CToken(TokenType::ttConst), value(val) {}
     string ToString()
     {
         return to_string(value);
@@ -123,7 +126,7 @@ class CRealConstToken : public CToken
 private:
     double value;
 public:
-    CRealConstToken(double val) : CToken(ttConst), value(val) {}
+    CRealConstToken(double val) : CToken(TokenType::ttConst), value(val) {}
     string ToString()
     {
         return to_string(value);
@@ -137,7 +140,7 @@ class CStringConstToken : public CToken
 private:
     string value;
 public:
-    CStringConstToken(string val) : CToken(ttConst), value(val) {}
+    CStringConstToken(string val) : CToken(TokenType::ttConst), value(val) {}
     string ToString()
     {
         return value;
@@ -151,7 +154,7 @@ class CBoolConstToken : public CToken
 private:
     bool value;
 public:
-    CBoolConstToken(bool val) : CToken(ttConst), value(val) {}
+    CBoolConstToken(bool val) : CToken(TokenType::ttConst), value(val) {}
     string ToString()
     {
         return value ? "true" : "false";
@@ -197,6 +200,7 @@ public:
             getline(input, buffer);
             cur_ch = 0;
             cur_line++;
+            cout << buffer << endl;
             return make_tuple('\n', new CTextPosition(cur_line, cur_ch));
         }
         cur_ch++;
@@ -224,11 +228,14 @@ private:
 public:
     CTokenPtr getNextToken()
     {
-        if (!cur_ch || cur_ch == '\n' || cur_ch == ' ')
+        if (!cur_ch)
             tie(cur_ch, cur_tp) = io->nextch();
 
         if (!cur_ch)
             return nullptr;
+
+        while (cur_ch == '\n' || cur_ch == ' ')
+            tie(cur_ch, cur_tp) = io->nextch();
         
         string next_t = "";
 
@@ -333,21 +340,21 @@ public:
 
     void accept(KeyWords keyword)
     {
-        if (curToken->getType() == ttKeyword)
+        if (curToken->getType() == TokenType::ttKeyword)
         {
             auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
             if (kw->getCode() != keyword)
-                io->WriteError("expected keyword: " + keyword);
+                io->WriteError("\t>expected keyword: " + to_string((int)keyword));
             curToken = lexer->getNextToken();
         }
         else
-            io->WriteError("expected keyword: " + keyword);
+            io->WriteError("\t>expected keyword: " + to_string((int)keyword));
     }
 
     void accept(TokenType tt)
     {
         if (curToken->getType() != tt)
-            io->WriteError("expected token type: " + tt);
+            io->WriteError("\t>expected token type: " + to_string((int)tt));
         curToken = lexer->getNextToken();
     }
 
@@ -355,23 +362,100 @@ public:
     {
 
     }
+    void vardeclaration()
+    {
+        accept(TokenType::ttIdent);
+        if (curToken->getType() == TokenType::ttKeyword)
+        {
+            auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);        
+            while (kw->getCode() == KeyWords::commaSy)
+            {
+                accept(KeyWords::commaSy);
+                accept(TokenType::ttIdent);
+                if (curToken->getType() == TokenType::ttKeyword)
+                    kw = dynamic_cast<CKeywordTokenPtr>(curToken);
+                else
+                    break;
+            }
+        }
+        accept(KeyWords::colonSy);
+        accept(TokenType::ttIdent);
+    }
     void varpart()
     {
-        accept(varSy);
+        accept(KeyWords::varSy);
+        while (curToken->getType() == TokenType::ttIdent)
+        {
+            vardeclaration();
+            accept(KeyWords::semiColonSy);
+        }
+    }
+    void expr()
+    {
 
+    }
+    void variable()
+    {
 
+    }
+    void statement()
+    {
+
+    }
+    void compositestatement()
+    {
+        accept(KeyWords::beginSy);
+        statement();
+        if (curToken->getType() == TokenType::ttKeyword)
+        {
+            auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
+            while (kw->getCode() == KeyWords::semiColonSy)
+            {
+                accept(KeyWords::commaSy);
+                accept(TokenType::ttIdent);
+                if (curToken->getType() == TokenType::ttKeyword)
+                    kw = dynamic_cast<CKeywordTokenPtr>(curToken);
+                else
+                    break;
+            }
+            statement();
+        }
+        accept(KeyWords::endSy);
+    }
+    void preccycle()
+    {
+        accept(KeyWords::whileSy);
+        expr();
+        accept(KeyWords::doSy);
+        statement();
+    }
+    void tail()
+    {
+        if (curToken->getType() == TokenType::ttKeyword)
+        {
+            auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
+            if (kw->getCode() == KeyWords::elseSy)
+            {
+                accept(KeyWords::elseSy);
+                statement();
+            }
+        }
+    }
+    void condition()
+    {
+        accept(KeyWords::ifSy);
+        expr();
+        accept(KeyWords::thenSy);
+        statement();
+        tail();
     }
     void statementpart()
     {
-        accept(beginSy);
-
-
-        accept(endSy);
+        compositestatement();
     }
-
     void block()
     {
-        typepart();
+        //typepart();
         varpart();
         statementpart();
     }
@@ -379,22 +463,23 @@ public:
     void program()
     {
         curToken = lexer->getNextToken();
-        accept(programSy);
-        accept(ttIdent);
-        accept(semiColonSy);
+        accept(KeyWords::programSy);
+        accept(TokenType::ttIdent);
+        accept(KeyWords::semiColonSy);
         block();
-        accept(dotSy);
+        accept(KeyWords::dotSy);
     }
 };
 
 int main() {
-    CTokenPtr token = nullptr;
-    
-
-    /*while (token = lexer->getNextToken())
+    /*CTokenPtr token = nullptr;
+    while (token = lexer->getNextToken())
     {
         cout << token->ToString() << endl;
     }*/
+
+    auto syntax = new CSyntax();
+    syntax->program();
 
     cout << "d o n e";
 
