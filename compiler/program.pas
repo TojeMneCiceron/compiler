@@ -1,3 +1,4 @@
+program prog;
 var s:string;
 r:real;
 a,b,c:integer;

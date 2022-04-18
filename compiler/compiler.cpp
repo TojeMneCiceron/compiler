@@ -16,7 +16,7 @@ enum KeyWords {
     ifSy, elseSy,
     whileSy, doSy,
     quotSy, colonSy, semiColonSy, dotSy,
-    intSy, realSy, strSy, boolSy
+    programSy,
 };
 
 map<string, KeyWords> keywords
@@ -46,11 +46,9 @@ map<string, KeyWords> keywords
     {"\"", quotSy},
     {":", colonSy},
     {";", semiColonSy},
-    {"integer", intSy},
-    {"real", realSy},
-    {"string", strSy},
-    {"Boolean", boolSy},
+    {"program", programSy}
 };
+
 
 #define DECL_PTR(ClassName) using ClassName ## Ptr = unique_ptr<ClassName>;
 
@@ -91,8 +89,13 @@ class CKeywordToken : public CToken
 {
 private:
     string keyword;
+    KeyWords code;
 public:
-    CKeywordToken(string _keyword) : CToken(ttKeyword), keyword(_keyword) {}
+    CKeywordToken(string _keyword) : CToken(ttKeyword), keyword(_keyword), code(keywords[_keyword]) {}
+    KeyWords getCode()
+    {
+        return code;
+    }
     string ToString()
     {
         return keyword;
@@ -162,49 +165,67 @@ private:
     int line_number;
     int ch_number;
 public:
+    CTextPosition(int _line_number, int _ch_number) {}
     int getLineNumber() { return line_number; };
     int getChNumber() { return ch_number; };
 };
+typedef CTextPosition* CTextPositionPtr;
 
 class CError {
 private:
-    int error_code;
-    CTextPosition text_position;
+    string error_code;
+    CTextPositionPtr text_position;
 public:
-    int getErrorCode() { return error_code; };
-    CTextPosition getTextPosition() { return text_position; };
+    CError(string code, CTextPositionPtr tp) {}
+    string getErrorCode() { return error_code; };
+    CTextPositionPtr getTextPosition() { return text_position; };
 };
+typedef CError* CErrorPtr;
 
 class CioModule {
 private:
     string buffer;
     int cur_ch;
+    int cur_line = 0;
 public:
-    char nextch()
+    tuple<char, CTextPositionPtr> nextch()
     {
         if (cur_ch == buffer.size() && input.eof())
-            return NULL;
+            return make_tuple(NULL, new CTextPosition(cur_line, cur_ch));
         if (cur_ch == buffer.size() && !input.eof())
         {
             getline(input, buffer);
             cur_ch = 0;
-            return '\n';
+            cur_line++;
+            return make_tuple('\n', new CTextPosition(cur_line, cur_ch));
         }
         cur_ch++;
-        return buffer[cur_ch - 1];
+        return make_tuple(buffer[cur_ch - 1], new CTextPosition(cur_line, cur_ch));
     }
-    void WriteError(CError error);
+    //void WriteError(CError error)
+    void WriteError(string error)
+    {
+        cout << error << endl;
+    }
+    void WriteError(CError* error)
+    {
+        cout << "=== error...\n";
+        /*cout << "\n=== line: " << error->getTextPosition()->getLineNumber() << "char: " << error->getTextPosition()->getChNumber();
+        cout << "\n=== error code: " << error->getErrorCode();*/
+    }
 };
 //DECL_PTR(CioModule);
+auto io = new CioModule();
 
 class CLexer {
 private:
     char cur_ch;
+    CTextPositionPtr cur_tp;
 public:
-    CTokenPtr getNextToken(CioModule* io)
+    CTokenPtr getNextToken()
     {
         if (!cur_ch || cur_ch == '\n' || cur_ch == ' ')
-            cur_ch = io->nextch();
+            tie(cur_ch, cur_tp) = io->nextch();
 
         if (!cur_ch)
             return nullptr;
@@ -219,7 +240,7 @@ public:
                 cur_ch >= '0' && cur_ch <= '9')
             {
                 next_t += cur_ch;
-                cur_ch = io->nextch();
+                tie(cur_ch, cur_tp) = io->nextch();
             }
 
             if (next_t == "true")
@@ -237,7 +258,7 @@ public:
             while (cur_ch >= '0' && cur_ch <= '9' || cur_ch == '.')
             {
                 next_t += cur_ch;
-                cur_ch = io->nextch();
+                tie(cur_ch, cur_tp) = io->nextch();
             }
 
             if (next_t.find('.') == string::npos)
@@ -252,70 +273,128 @@ public:
         switch (cur_ch)
         {
         case ':':
-            cur_ch = io->nextch();
+            tie(cur_ch, cur_tp) = io->nextch();
             if (cur_ch == '=')
             {
                 next_t += cur_ch;
-                cur_ch = io->nextch();
+                tie(cur_ch, cur_tp) = io->nextch();
             }
             return new CKeywordToken(next_t);
         case '<':
-            cur_ch = io->nextch();
+            tie(cur_ch, cur_tp) = io->nextch();
             if (cur_ch == '=')
             {
                 next_t += cur_ch;
-                cur_ch = io->nextch();
+                tie(cur_ch, cur_tp) = io->nextch();
             }
             return new CKeywordToken(next_t);
         case '>':
-            cur_ch = io->nextch();
+            tie(cur_ch, cur_tp) = io->nextch();
             if (cur_ch == '=')
             {
                 next_t += cur_ch;
-                cur_ch = io->nextch();
+                tie(cur_ch, cur_tp) = io->nextch();
             }
             return new CKeywordToken(next_t);
         case '\"':
-            cur_ch = io->nextch();
+            tie(cur_ch, cur_tp) = io->nextch();
             while (cur_ch != '\"')
             {
                 next_t += cur_ch;
-                cur_ch = io->nextch();
+                tie(cur_ch, cur_tp) = io->nextch();
+                if (cur_ch == '\n')
+                {
+                    io->WriteError(new CError("лекс ошибка???", cur_tp));
+                    break;
+                }
             }
-            next_t += cur_ch;
-            cur_ch = io->nextch();
+            if (cur_ch != '\n')
+                next_t += cur_ch;
+            tie(cur_ch, cur_tp) = io->nextch();
             return new CStringConstToken(next_t);
        /* case ';':
-            cur_ch = io->nextch();
+            tie(cur_ch, cur_tp) = io->nextch();
             return next_t;*/
 
         default:
-            cur_ch = io->nextch();
+            tie(cur_ch, cur_tp) = io->nextch();
             return new CKeywordToken(next_t);
         }
 
         //return next_t;
     };
 };
+auto lexer = new CLexer();
+
+class CSyntax {
+private:
+    CTokenPtr curToken;
+public:
+
+    void accept(KeyWords keyword)
+    {
+        if (curToken->getType() == ttKeyword)
+        {
+            auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
+            if (kw->getCode() != keyword)
+                io->WriteError("expected keyword: " + keyword);
+            curToken = lexer->getNextToken();
+        }
+        else
+            io->WriteError("expected keyword: " + keyword);
+    }
+
+    void accept(TokenType tt)
+    {
+        if (curToken->getType() != tt)
+            io->WriteError("expected token type: " + tt);
+        curToken = lexer->getNextToken();
+    }
+
+    void typepart() 
+    {
+
+    }
+    void varpart()
+    {
+        accept(varSy);
+
+
+    }
+    void statementpart()
+    {
+        accept(beginSy);
+
+
+        accept(endSy);
+    }
+
+    void block()
+    {
+        typepart();
+        varpart();
+        statementpart();
+    }
+
+    void program()
+    {
+        curToken = lexer->getNextToken();
+        accept(programSy);
+        accept(ttIdent);
+        accept(semiColonSy);
+        block();
+        accept(dotSy);
+    }
+};
 
 int main() {
-    auto io = new CioModule();
     CTokenPtr token = nullptr;
-    auto lexer = new CLexer();
-    //string ch;
-    //ch = lexer->getNextToken(io);
+    
 
-    //while (ch != "")
-    //{
-    //    //cout << token->ToString();
-    //    cout << ch << endl;
-    //    ch = lexer->getNextToken(io);
-    //}
-
-    while (token = lexer->getNextToken(io))
+    /*while (token = lexer->getNextToken())
     {
         cout << token->ToString() << endl;
-    }
+    }*/
 
     cout << "d o n e";
 
