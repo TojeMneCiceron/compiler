@@ -14,17 +14,17 @@ if a = 1 then
 b:=24;
 if a >= 1 then
 begin
-b:=24;
+b:=24
 end
 else
 begin
 c:=a+b;
-s:='A';
+s:='A'
 end;
 if c<=b then
 a:=a+1
 else if b<c then
 a:=a-1;
 r:=1+2*(3-42)/5+6;
-d:=true;
+d:=true
 end.

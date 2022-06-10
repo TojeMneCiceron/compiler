@@ -3,20 +3,28 @@
 #include <memory>
 #include <map>
 #include <fstream>
+#include <vector>
 using namespace std;
 
-ifstream input("whileif.pas");
+ifstream input("while.pas");
 
 enum KeyWords {
-    varSy,
-    beginSy, endSy,
-    andSy, orSy, notSy, evenSy, lessSy, moreSy, lessEvenSy, moreEvenSy, notEvenSy,
-    assignSy, plusSy, minusSy, multSy, subSy, divSy, modSy,
-    leftBrSy, rightBrSy,
-    ifSy, thenSy, elseSy,
-    whileSy, doSy,
-    quotSy, colonSy, semiColonSy, dotSy, commaSy,
-    programSy,
+    assignSy = 51,
+    beginSy = 17,
+    endSy = 13, 
+    evenSy = 16,
+    leftBrSy = 9,
+    rightBrSy = 4,
+    ifSy = 56, 
+    thenSy = 52,
+    doSy = 54,
+    colonSy = 5, semiColonSy = 14, commaSy = 20,
+    programSy = 3, dotSy = 61,
+    varSy, andSy, orSy, notSy, lessSy, moreSy, lessEvenSy, moreEvenSy, notEvenSy,
+    plusSy, minusSy, multSy, subSy, divSy, modSy,
+    elseSy,
+    whileSy,
+    quotSy,
 };
 
 map<string, KeyWords> keywords
@@ -58,9 +66,24 @@ map<string, KeyWords> keywords
 
 #define DECL_PTR(ClassName) using ClassName ## Ptr = unique_ptr<ClassName>;
 
+class CTextPosition {
+private:
+    int line_number;
+    int ch_number;
+public:
+    CTextPosition(int _line_number, int _ch_number)
+    {
+        line_number = _line_number;
+        ch_number = _ch_number;
+    }
+    int getLineNumber() { return line_number; };
+    int getChNumber() { return ch_number; };
+};
+typedef CTextPosition* CTextPositionPtr;
+
 #define PURE = 0
 enum TokenType {
-    ttIdent ,
+    ttIdent = 2,
     ttKeyword,
     ttConst
 };
@@ -68,9 +91,18 @@ enum TokenType {
 class CToken {
 private:
     TokenType tType;
+    CTextPositionPtr text_position;
 public:
-    CToken(TokenType _type) { tType = _type; }
+    CToken(TokenType _type, CTextPositionPtr tp)
+    {
+        tType = _type; 
+        text_position = tp;
+    }
     TokenType getType() { return tType; };
+    CTextPositionPtr getTextPosition()
+    {
+        return text_position;
+    }
     virtual string ToString() PURE;
 };
 
@@ -82,7 +114,7 @@ class CIdentToken : public CToken
 private:
     string ident;
 public:
-    CIdentToken(string _ident): CToken(ttIdent), ident(_ident) {}
+    CIdentToken(string _ident, CTextPositionPtr tp): CToken(ttIdent, tp), ident(_ident)  {}
     string ToString() 
     {
         return ident;
@@ -97,7 +129,7 @@ private:
     string keyword;
     KeyWords code;
 public:
-    CKeywordToken(string _keyword) : CToken(ttKeyword), keyword(_keyword), code(keywords[_keyword]) {}
+    CKeywordToken(string _keyword, CTextPositionPtr tp) : CToken(ttKeyword, tp), keyword(_keyword), code(keywords[_keyword]) {}
     KeyWords getCode()
     {
         return code;
@@ -115,7 +147,7 @@ class CIntConstToken : public CToken
 private:
     int value;
 public:
-    CIntConstToken(int val) : CToken(ttConst), value(val) {}
+    CIntConstToken(int val, CTextPositionPtr tp) : CToken(ttConst, tp), value(val) {}
     string ToString()
     {
         return to_string(value);
@@ -129,7 +161,7 @@ class CRealConstToken : public CToken
 private:
     double value;
 public:
-    CRealConstToken(double val) : CToken(ttConst), value(val) {}
+    CRealConstToken(double val, CTextPositionPtr tp) : CToken(ttConst, tp), value(val) {}
     string ToString()
     {
         return to_string(value);
@@ -143,7 +175,7 @@ class CCharConstToken : public CToken
 private:
     char value;
 public:
-    CCharConstToken(char val) : CToken(ttConst), value(val) {}
+    CCharConstToken(char val, CTextPositionPtr tp) : CToken(ttConst, tp), value(val) {}
     string ToString()
     {
         return "" + value;
@@ -157,7 +189,7 @@ class CBoolConstToken : public CToken
 private:
     bool value;
 public:
-    CBoolConstToken(bool val) : CToken(ttConst), value(val) {}
+    CBoolConstToken(bool val, CTextPositionPtr tp) : CToken(ttConst, tp), value(val) {}
     string ToString()
     {
         return value ? "true" : "false";
@@ -165,28 +197,6 @@ public:
 };
 typedef CBoolConstToken* CBoolConstTokenPtr;
 //DECL_PTR(CBoolConstToken);
-
-class CTextPosition {
-private:
-    int line_number;
-    int ch_number;
-public:
-    CTextPosition(int _line_number, int _ch_number) {}
-    int getLineNumber() { return line_number; };
-    int getChNumber() { return ch_number; };
-};
-typedef CTextPosition* CTextPositionPtr;
-
-class CError {
-private:
-    string error_code;
-    CTextPositionPtr text_position;
-public:
-    CError(string code, CTextPositionPtr tp) {}
-    string getErrorCode() { return error_code; };
-    CTextPositionPtr getTextPosition() { return text_position; };
-};
-typedef CError* CErrorPtr;
 
 class CioModule {
 private:
@@ -203,22 +213,15 @@ public:
             getline(input, buffer);
             cur_ch = 0;
             cur_line++;
-            //cout << buffer << endl;
+            cout << cur_line << "\t" << buffer << endl;
             return make_tuple('\n', new CTextPosition(cur_line, cur_ch));
         }
         cur_ch++;
         return make_tuple(buffer[cur_ch - 1], new CTextPosition(cur_line, cur_ch));
     }
-    //void WriteError(CError error)
-    void WriteError(string error)
+    void WriteError(int error, CTextPositionPtr tp)
     {
-        cout << error << endl;
-    }
-    void WriteError(CError* error)
-    {
-        cout << "=== error...\n";
-        /*cout << "\n=== line: " << error->getTextPosition()->getLineNumber() << "char: " << error->getTextPosition()->getChNumber();
-        cout << "\n=== error code: " << error->getErrorCode();*/
+        cout << "****ERROR " << error << "****  line: " << tp->getLineNumber() << "  symbol position: " << tp->getChNumber() << endl;
     }
 };
 //DECL_PTR(CioModule);
@@ -231,6 +234,7 @@ private:
 public:
     CTokenPtr getNextToken()
     {
+        CTextPositionPtr token_tp = nullptr;
         if (!cur_ch)
             tie(cur_ch, cur_tp) = io->nextch();
 
@@ -245,6 +249,7 @@ public:
         if (cur_ch >= 'a' && cur_ch <= 'z' ||
             cur_ch >= 'A' && cur_ch <= 'Z')
         {
+            token_tp = cur_tp;
             while (cur_ch >= 'a' && cur_ch <= 'z' ||
                 cur_ch >= 'A' && cur_ch <= 'Z' ||
                 cur_ch >= '0' && cur_ch <= '9')
@@ -254,17 +259,18 @@ public:
             }
 
             if (next_t == "true")
-                return new CBoolConstToken(true);
+                return new CBoolConstToken(true, token_tp);
             if (next_t == "false")
-                return new CBoolConstToken(false);
+                return new CBoolConstToken(false, token_tp);
 
             if (keywords.count(next_t) != 0)
-                return new CKeywordToken(next_t);
+                return new CKeywordToken(next_t, token_tp);
 
-            return new CIdentToken(next_t);
+            return new CIdentToken(next_t, token_tp);
         }
         if (cur_ch >= '0' && cur_ch <= '9')
         {
+            token_tp = cur_tp;
             while (cur_ch >= '0' && cur_ch <= '9' || cur_ch == '.')
             {
                 next_t += cur_ch;
@@ -272,14 +278,14 @@ public:
             }
 
             if (next_t.find('.') == string::npos)
-                return new CIntConstToken(stoi(next_t));
+                return new CIntConstToken(stoi(next_t), token_tp);
             else
-                return new CRealConstToken(stod(next_t));
+                return new CRealConstToken(stod(next_t), token_tp);
         }
 
         next_t += cur_ch;
         //cur_ch = io->nextch();
-
+        token_tp = cur_tp;
         switch (cur_ch)
         {
         case ':':
@@ -289,7 +295,7 @@ public:
                 next_t += cur_ch;
                 tie(cur_ch, cur_tp) = io->nextch();
             }
-            return new CKeywordToken(next_t);
+            return new CKeywordToken(next_t, token_tp);
         case '<':
             tie(cur_ch, cur_tp) = io->nextch();
             if (cur_ch == '=' || cur_ch == '>')
@@ -297,7 +303,7 @@ public:
                 next_t += cur_ch;
                 tie(cur_ch, cur_tp) = io->nextch();
             }
-            return new CKeywordToken(next_t);
+            return new CKeywordToken(next_t, token_tp);
         case '>':
             tie(cur_ch, cur_tp) = io->nextch();
             if (cur_ch == '=')
@@ -305,7 +311,7 @@ public:
                 next_t += cur_ch;
                 tie(cur_ch, cur_tp) = io->nextch();
             }
-            return new CKeywordToken(next_t);
+            return new CKeywordToken(next_t, token_tp);
         case '\'':
             //char
             tie(cur_ch, cur_tp) = io->nextch();
@@ -314,7 +320,7 @@ public:
             tie(cur_ch, cur_tp) = io->nextch();
             next_t += cur_ch;
             tie(cur_ch, cur_tp) = io->nextch();
-            return new CCharConstToken(next_t[1]);
+            return new CCharConstToken(next_t[1], token_tp);
        /* case ';':
             tie(cur_ch, cur_tp) = io->nextch();
             return next_t;*/
@@ -322,7 +328,7 @@ public:
         default:
             tie(cur_ch, cur_tp) = io->nextch();
             //if (keywords.find(next_t) != keywords.end())
-                return new CKeywordToken(next_t);
+                return new CKeywordToken(next_t, token_tp);
         }
 
         //return next_t;
@@ -334,6 +340,37 @@ class CSyntax {
 private:
     CTokenPtr curToken;
 public:
+    int symbol()
+    {
+        if (curToken->getType() != ttKeyword)
+            return curToken->getType();
+        auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
+        return kw->getCode();
+    }
+
+    bool belong(int symbol, vector<int> starters)
+    {
+        return find(starters.begin(), starters.end(), symbol) != starters.end();
+    }
+    void skip_to(vector<int> followers)
+    {
+        while (curToken != nullptr && !belong(symbol(), followers))
+            curToken = lexer->getNextToken();
+    }
+    void skip_to(vector<int> starters, vector<int> followers)
+    {
+        while (curToken != nullptr && !belong(symbol(), starters) && !belong(symbol(), followers))
+            curToken = lexer->getNextToken();
+    }
+
+    void skip_to_followers(vector<int> followers)
+    {
+        if (!belong(symbol(), followers))
+        {
+            io->WriteError(6, curToken->getTextPosition());
+            skip_to(followers);
+        }
+    }
 
     void accept(KeyWords keyword)
     {
@@ -341,287 +378,295 @@ public:
         {
             auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
             if (kw->getCode() != keyword)
-                io->WriteError("\t>expected keyword: " + to_string((int)keyword));
+                io->WriteError((int)keyword, curToken->getTextPosition());
             curToken = lexer->getNextToken();
-            if (curToken != nullptr)
-                cout << curToken->ToString() << endl;
+            /*if (curToken != nullptr)
+                cout << curToken->ToString() << endl;*/
         }
         else
-            io->WriteError("\t>expected keyword: " + to_string((int)keyword));
+            io->WriteError((int)keyword, curToken->getTextPosition());
     }
 
     void accept(TokenType tt)
     {
         if (curToken->getType() != tt)
-            io->WriteError("\t>expected token type: " + to_string((int)tt));
+            io->WriteError((int)tt, curToken->getTextPosition());
         curToken = lexer->getNextToken();
-        if (curToken != nullptr)
-            cout << curToken->ToString() << endl;
+        /*if (curToken != nullptr)
+            cout << curToken->ToString() << endl;*/
     }
-
-    void typepart() 
+    void vardeclaration(vector<int> followers)
     {
-
-    }
-    void vardeclaration()
-    {
-        accept(ttIdent);
-        if (curToken->getType() == ttKeyword)
+        if (symbol() != ttIdent)
         {
-            auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);        
-            while (kw->getCode() == commaSy)
+            io->WriteError(ttIdent, curToken->getTextPosition());
+            auto starters = followers; starters.push_back(ttIdent);
+            skip_to(starters);
+        }
+        if (symbol() == ttIdent)
+        {
+            accept(ttIdent);
+            if (curToken->getType() == ttKeyword)
             {
-                accept(commaSy);
-                accept(ttIdent);
-                if (curToken->getType() == ttKeyword)
-                    kw = dynamic_cast<CKeywordTokenPtr>(curToken);
-                else
-                    break;
+                auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
+                while (kw->getCode() == commaSy)
+                {
+                    accept(commaSy);
+                    accept(ttIdent);
+                    if (curToken->getType() == ttKeyword)
+                        kw = dynamic_cast<CKeywordTokenPtr>(curToken);
+                    else
+                        break;
+                }
             }
+            accept(colonSy);
+            accept(ttIdent);
+            skip_to_followers(followers);
         }
-        accept(colonSy);
-        accept(ttIdent);
     }
-    void varpart()
+    void varpart(vector<int> followers)
     {
-        accept(varSy);
-        while (curToken->getType() == ttIdent)
+        if (symbol() != varSy)
         {
-            vardeclaration();
-            accept(semiColonSy);
+            io->WriteError(varSy, curToken->getTextPosition());
+            auto starters = followers; starters.push_back(varSy);
+            skip_to(starters);
+        }
+        if (symbol() == varSy)
+        {
+            accept(varSy);
+            while (curToken->getType() == ttIdent)
+            {
+                vector<int> var_followers = followers; var_followers.push_back(semiColonSy);
+                vardeclaration(var_followers);
+                accept(semiColonSy);
+            }
+
+            skip_to_followers(followers);
         }
     }
-    bool is_add_op(CTokenPtr token)
+    bool is_add_op()
     {
         auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
         return kw->getCode() == plusSy || kw->getCode() == minusSy || kw->getCode() == orSy;
     }
-    void add_op()
-    {
-        if (curToken->getType() == ttKeyword)
-        {
-            auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
-            switch (kw->getCode())
-            {
-            case plusSy:
-                accept(plusSy);
-                return;
-            case minusSy:
-                accept(minusSy);
-                return;
-            }
-        }
-        accept(orSy);
-    }
-    bool is_mult_op(CTokenPtr token)
+    bool is_mult_op()
     {
         auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
         return kw->getCode() == multSy || kw->getCode() == subSy 
             || kw->getCode() == divSy || kw->getCode() == modSy || kw->getCode() == andSy;
     }
-    void mult_op()
+    void factor(vector<int> followers)
     {
-        if (curToken->getType() == ttKeyword)
+        vector<int> starters = { ttConst, ttIdent, leftBrSy };
+        if (!belong(symbol(), starters))
         {
-            auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
-            switch (kw->getCode())
-            {
-            case multSy:
-                accept(multSy);
-                return;
-            case subSy:
-                accept(subSy);
-                return;
-            case divSy:
-                accept(divSy);
-                return;
-            case modSy:
-                accept(modSy);
-                return;
-            }
+            io->WriteError(144, curToken->getTextPosition());
+            skip_to(starters, followers);
         }
-        accept(andSy);
-    }
-    void factor()
-    {
-        switch (curToken->getType())
+        if (belong(symbol(), starters))
         {
-        case ttConst:
-            accept(ttConst);
-            break;
-        case ttIdent:
-            accept(ttIdent);
-            break;
-        case ttKeyword:
-            auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
-            if (kw->getCode() == leftBrSy)
+            switch (curToken->getType())
             {
-                accept(leftBrSy);
-                expr();
-                accept(rightBrSy);
+            case ttConst:
+                accept(ttConst);
+                break;
+            case ttIdent:
+                accept(ttIdent);
+                break;
+            case ttKeyword:
+                auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
+                if (kw->getCode() == leftBrSy)
+                {
+                    accept(leftBrSy);
+                    vector<int> expr_followers = followers; expr_followers.push_back(rightBrSy);
+                    expr(expr_followers);
+                    accept(rightBrSy);
+                }
+                break;
             }
-            break;
+            skip_to_followers(followers);
         }
     }
-    void term()
+    void term(vector<int> followers)
     {
-        factor();
-        if (curToken->getType() == ttKeyword && is_mult_op(curToken))
+        vector<int> factor_followers = followers; factor_followers.insert(factor_followers.end(), { multSy, subSy, divSy, modSy, andSy });
+        factor(factor_followers);
+        if (curToken->getType() == ttKeyword && is_mult_op())
         {
-            while (curToken->getType() == ttKeyword && is_mult_op(curToken))
+            while (curToken->getType() == ttKeyword && is_mult_op())
             {
-                mult_op();
-                factor();
+                curToken = lexer->getNextToken();
+                factor(factor_followers);
             }
         }
+        skip_to_followers(followers);
     }
-    void simple_expr()
+    void simple_expr(vector<int> followers)
     {
-        term();
-        if (curToken->getType() == ttKeyword && is_add_op(curToken))
+        vector<int> term_followers = followers; term_followers.insert(term_followers.end(), { plusSy, minusSy, orSy });
+        term(term_followers);
+        if (curToken->getType() == ttKeyword && is_add_op())
         {
-            while (curToken->getType() == ttKeyword && is_add_op(curToken))
+            while (curToken->getType() == ttKeyword && is_add_op())
             {
-                add_op();
-                term();
+                curToken = lexer->getNextToken();
+                term(term_followers);
             }
         }
+        skip_to_followers(followers);
     }
-    bool is_relation_op(CTokenPtr token)
+    bool is_relation_op()
     {
         auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
         return kw->getCode() == evenSy || kw->getCode() == lessSy
             || kw->getCode() == lessEvenSy || kw->getCode() == moreSy 
             || kw->getCode() == moreEvenSy || kw->getCode() == notEvenSy;
     }
-    void relation_op()
+    void expr(vector<int> followers)
     {
-        if (curToken->getType() == ttKeyword)
+        vector<int> se_followers = followers; se_followers.insert(se_followers.end(), { evenSy, lessSy, lessEvenSy, moreSy, moreEvenSy, notEvenSy });
+        simple_expr(se_followers);
+        if (curToken->getType() == ttKeyword && is_relation_op())
         {
-            auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
-            switch (kw->getCode())
-            {
-                case evenSy:
-                    accept(evenSy);
-                    return;
-                case lessSy:
-                    accept(lessSy);
-                    return;
-                case lessEvenSy:
-                    accept(lessEvenSy);
-                    return;
-                case moreSy:
-                    accept(moreSy);
-                    return;
-                case moreEvenSy:
-                    accept(moreEvenSy);
-                    return;
-            }
+            curToken = lexer->getNextToken();
+            simple_expr(followers);
         }
-        accept(notEvenSy);
+        skip_to_followers(followers);
     }
-    void expr()
-    {
-        simple_expr();
-        if (curToken->getType() == ttKeyword && is_relation_op(curToken))
-        {
-            relation_op();
-            simple_expr();
-        }
-    }
-    void assignstatement()
+    void assignstatement(vector<int> followers)
     {
         accept(ttIdent);
         accept(assignSy);
-        expr();
+        expr(followers);
+        skip_to_followers(followers);
     }
-    void statement()
+    void statement(vector<int> followers)
     {
-        switch (curToken->getType())
+        vector<int> starters = { ttIdent, beginSy, ifSy, whileSy };
+        if (!belong(symbol(), starters))
         {
-        case ttIdent:
-            assignstatement();
-            break;
-        case ttKeyword:
-            auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
-            switch (kw->getCode())
+            io->WriteError(183, curToken->getTextPosition());
+            skip_to(starters, followers);
+        }
+        if (belong(symbol(), starters))
+        {
+            switch (curToken->getType())
             {
+            case ttIdent:
+                assignstatement(followers);
+                break;
+            case ttKeyword:
+                auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
+                switch (kw->getCode())
+                {
                 case beginSy:
-                    compositestatement();
+                    compositestatement(followers);
                     break;
                 case ifSy:
-                    condition();
+                    condition(followers);
                     break;
                 case whileSy:
-                    preccycle();
+                    preccycle(followers);
                     break;
+                }
+                break;
             }
-            break;
+            skip_to_followers(followers);
         }
     }
-    void compositestatement()
+    void compositestatement(vector<int> followers)
     {
-        accept(beginSy);
-        statement();
-        if (curToken->getType() == ttKeyword)
+        if (symbol() != beginSy)
         {
-            auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
-            while (kw->getCode() == semiColonSy)
-            {
-                accept(semiColonSy);
-                statement();
-                
-                if (curToken->getType() == ttKeyword)
-                    kw = dynamic_cast<CKeywordTokenPtr>(curToken);
-            }
+            io->WriteError(ttIdent, curToken->getTextPosition());
+            auto starters = followers; starters.push_back(beginSy);
+            skip_to(starters);
         }
-        accept(endSy);
+        if (symbol() == beginSy)
+        {
+            accept(beginSy);
+            vector<int> st_followers = followers; st_followers.insert(st_followers.end(), { semiColonSy, endSy });
+            statement(st_followers);
+            if (curToken->getType() == ttKeyword)
+            {
+                auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
+                while (kw->getCode() == semiColonSy)
+                {
+                    accept(semiColonSy);
+                    vector<int> st_followers = followers; st_followers.insert(st_followers.end(), { semiColonSy, endSy });
+                    statement(st_followers);
+
+                    if (curToken->getType() == ttKeyword)
+                        kw = dynamic_cast<CKeywordTokenPtr>(curToken);
+                }
+            }
+            accept(endSy);
+            skip_to_followers(followers);
+        }
     }
-    void preccycle()
+    void preccycle(vector<int> followers)
     {
         accept(whileSy);
-        expr();
+        vector<int> expr_followers = followers; expr_followers.push_back(doSy); 
+        expr(expr_followers);
         accept(doSy);
-        statement();
+        statement(followers);
+        skip_to_followers(followers);
     }
-    void tail()
+    void condition(vector<int> followers)
     {
+        accept(ifSy);
+        vector<int> expr_followers = followers; expr_followers.push_back(thenSy);
+        expr(expr_followers);
+        accept(thenSy);
+        vector<int> st_followers = followers; st_followers.push_back(elseSy);
+        statement(st_followers);
         if (curToken->getType() == ttKeyword)
         {
             auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
             if (kw->getCode() == elseSy)
             {
                 accept(elseSy);
-                statement();
+                statement(followers);
             }
         }
+        skip_to_followers(followers);
     }
-    void condition()
+    void statementpart(vector<int> followers)
     {
-        accept(ifSy);
-        expr();
-        accept(thenSy);
-        statement();
-        tail();
+        compositestatement(followers);
+        skip_to_followers(followers);
     }
-    void statementpart()
+    void block(vector<int> followers)
     {
-        compositestatement();
+        auto var_followers = followers;
+        var_followers.push_back(beginSy);
+        varpart(var_followers);
+        statementpart(followers);
+        skip_to_followers(followers);
     }
-    void block()
-    {
-        typepart();
-        varpart();
-        statementpart();
-    }
-
     void program()
     {
         curToken = lexer->getNextToken();
-        accept(programSy);
-        accept(ttIdent);
-        accept(semiColonSy);
-        block();
+        if (curToken == nullptr)
+            return;
+
+        if (symbol() != programSy)
+        {
+            io->WriteError(programSy, curToken->getTextPosition());
+            vector<int> starters = { /*starters*/programSy, /*followers*/ varSy, beginSy, dotSy };
+            skip_to(starters);
+        }
+        if (symbol() == programSy)
+        {
+            accept(programSy);
+            accept(ttIdent);
+            accept(semiColonSy);
+        }
+        vector<int> followers;
+        followers.push_back(dotSy);
+        block(followers);
         accept(dotSy);
     }
 };

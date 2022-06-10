@@ -15,9 +15,9 @@ while b <> 2 do
 begin
 c:=2;
 if b>1*2 then
-a:=a-1;
+a:=a-1
 end;
 s:='A';
 r:=1+2*(3-42)/5+6;
-d:=true;
+d:=true
 end.
