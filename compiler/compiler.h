@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include <map>
+#include <vector>
 using namespace std;
 
 enum KeyWords {
@@ -190,7 +191,11 @@ class CSyntax {
 private:
     CTokenPtr curToken;
 public:
-
+    int symbol();
+    bool belong(int symbol, vector<int> starters);
+    void skip_to(vector<int> followers);
+    void skip_to(vector<int> starters, vector<int> followers);
+    void skip_to_followers(vector<int> followers);
     void accept(KeyWords keyword);
     void accept(TokenType tt);
     void vardeclaration();

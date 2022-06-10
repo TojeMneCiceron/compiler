@@ -16,6 +16,8 @@ begin
 c:=2;
 if b>1*2 then
 a:=a-1
+else
+a:=a+1
 end;
 s:='A';
 r:=1+2*(3-42)/5+6;

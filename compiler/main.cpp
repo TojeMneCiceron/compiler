@@ -3,10 +3,11 @@
 #include <memory>
 #include <map>
 #include <fstream>
+#include <iomanip>
 #include <vector>
 using namespace std;
 
-ifstream input("while.pas");
+ifstream input("syntaxerrors.pas");
 
 enum KeyWords {
     assignSy = 51,
@@ -105,10 +106,9 @@ public:
     }
     virtual string ToString() PURE;
 };
-
 typedef CToken* CTokenPtr;
 //DECL_PTR(CToken);
-
+    
 class CIdentToken : public CToken
 {
 private:
@@ -221,7 +221,7 @@ public:
     }
     void WriteError(int error, CTextPositionPtr tp)
     {
-        cout << "****ERROR " << error << "****  line: " << tp->getLineNumber() << "  symbol position: " << tp->getChNumber() << endl;
+        cout << "****ERROR " << error << "****   line: " << setw(3) << tp->getLineNumber() << "   symbol position: " << setw(3) << tp->getChNumber() << endl;
     }
 };
 //DECL_PTR(CioModule);
@@ -379,7 +379,8 @@ public:
             auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
             if (kw->getCode() != keyword)
                 io->WriteError((int)keyword, curToken->getTextPosition());
-            curToken = lexer->getNextToken();
+            else                
+                curToken = lexer->getNextToken();
             /*if (curToken != nullptr)
                 cout << curToken->ToString() << endl;*/
         }
@@ -391,7 +392,8 @@ public:
     {
         if (curToken->getType() != tt)
             io->WriteError((int)tt, curToken->getTextPosition());
-        curToken = lexer->getNextToken();
+        else
+            curToken = lexer->getNextToken();
         /*if (curToken != nullptr)
             cout << curToken->ToString() << endl;*/
     }
@@ -461,7 +463,7 @@ public:
         vector<int> starters = { ttConst, ttIdent, leftBrSy };
         if (!belong(symbol(), starters))
         {
-            io->WriteError(144, curToken->getTextPosition());
+            io->WriteError(1337, curToken->getTextPosition());
             skip_to(starters, followers);
         }
         if (belong(symbol(), starters))
@@ -608,7 +610,7 @@ public:
     void preccycle(vector<int> followers)
     {
         accept(whileSy);
-        vector<int> expr_followers = followers; expr_followers.push_back(doSy); 
+        vector<int> expr_followers = followers; expr_followers.insert(expr_followers.end(), { doSy, ttIdent, beginSy, ifSy, whileSy });
         expr(expr_followers);
         accept(doSy);
         statement(followers);
@@ -617,7 +619,7 @@ public:
     void condition(vector<int> followers)
     {
         accept(ifSy);
-        vector<int> expr_followers = followers; expr_followers.push_back(thenSy);
+        vector<int> expr_followers = followers; expr_followers.insert(expr_followers.end(), { thenSy, ttIdent, beginSy, ifSy, whileSy });
         expr(expr_followers);
         accept(thenSy);
         vector<int> st_followers = followers; st_followers.push_back(elseSy);
@@ -673,22 +675,25 @@ public:
 
 int main() {
     /*CTokenPtr token = nullptr;
+    ofstream fout("output.txt");
     while (token = lexer->getNextToken())
     {
-        cout << token->ToString() << "\t";
+        fout << token->ToString() << "\t";
         switch (token->getType())
         {
         case ttConst:
-            cout << "c" << endl;
+            fout << "const" << endl;
             break;
         case ttIdent:
-            cout << "i" << endl;
+            fout << "ident" << endl;
             break;
         case ttKeyword:
-            cout << "kw" << endl;
+            auto kw = dynamic_cast<CKeywordTokenPtr>(token);
+            fout << (kw->getCode()) << endl;
             break;
         }
-    }*/
+    }
+    fout.close();*/
 
     auto syntax = new CSyntax();
     syntax->program();
