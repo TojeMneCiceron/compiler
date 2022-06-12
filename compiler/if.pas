@@ -25,6 +25,6 @@ if c<=b then
 a:=a+1
 else if b<c then
 a:=a-1;
-r:=1+2*(3-42)/5+6;
+a:=1+2*(3-42)/5+6;
 d:=true
 end.

@@ -5,18 +5,19 @@
 #include <fstream>
 #include <iomanip>
 #include <vector>
+//#include "compiler.h"
 using namespace std;
 
-ifstream input("syntaxerrors.pas");
+string filename = "syntaxerrors.pas";
 
 enum KeyWords {
     assignSy = 51,
     beginSy = 17,
-    endSy = 13, 
+    endSy = 13,
     evenSy = 16,
     leftBrSy = 9,
     rightBrSy = 4,
-    ifSy = 56, 
+    ifSy = 56,
     thenSy = 52,
     doSy = 54,
     colonSy = 5, semiColonSy = 14, commaSy = 20,
@@ -27,7 +28,6 @@ enum KeyWords {
     whileSy,
     quotSy,
 };
-
 map<string, KeyWords> keywords
 {
     {"var", varSy},
@@ -63,9 +63,23 @@ map<string, KeyWords> keywords
     {",", commaSy},
     {"program", programSy}
 };
+enum TokenType {
+    ttIdent = 2,
+    ttKeyword,
+    ttConst
+};
+enum VariantType {
+    vtInt, vtReal, vtChar, vtBoolean, vtUndefined
+};
+map<string, VariantType> types
+{
+    {"integer", vtInt},
+    {"real", vtReal},
+    {"char", vtChar},
+    {"Boolean", vtBoolean}
+};
 
-
-#define DECL_PTR(ClassName) using ClassName ## Ptr = unique_ptr<ClassName>;
+#define PURE = 0
 
 class CTextPosition {
 private:
@@ -82,46 +96,30 @@ public:
 };
 typedef CTextPosition* CTextPositionPtr;
 
-#define PURE = 0
-enum TokenType {
-    ttIdent = 2,
-    ttKeyword,
-    ttConst
-};
-
 class CToken {
 private:
     TokenType tType;
+    VariantType vType;
     CTextPositionPtr text_position;
 public:
-    CToken(TokenType _type, CTextPositionPtr tp)
-    {
-        tType = _type; 
-        text_position = tp;
-    }
+    CToken(TokenType _type, VariantType _vType, CTextPositionPtr tp) : tType(_type), vType(_vType), text_position(tp) {}
     TokenType getType() { return tType; };
-    CTextPositionPtr getTextPosition()
-    {
-        return text_position;
-    }
+    VariantType getVarType() { return vType; };
+    void setVarType(VariantType _vType) { vType = _vType; };
+    CTextPositionPtr getTextPosition() { return text_position; }
     virtual string ToString() PURE;
 };
 typedef CToken* CTokenPtr;
-//DECL_PTR(CToken);
-    
+
 class CIdentToken : public CToken
 {
 private:
     string ident;
 public:
-    CIdentToken(string _ident, CTextPositionPtr tp): CToken(ttIdent, tp), ident(_ident)  {}
-    string ToString() 
-    {
-        return ident;
-    }
+    CIdentToken(string _ident, CTextPositionPtr tp) : CToken(ttIdent, vtUndefined, tp), ident(_ident) {}
+    string ToString() { return ident; }
 };
 typedef CIdentToken* CIdentTokenPtr;
-//DECL_PTR(CIdentToken);
 
 class CKeywordToken : public CToken
 {
@@ -129,7 +127,7 @@ private:
     string keyword;
     KeyWords code;
 public:
-    CKeywordToken(string _keyword, CTextPositionPtr tp) : CToken(ttKeyword, tp), keyword(_keyword), code(keywords[_keyword]) {}
+    CKeywordToken(string _keyword, CTextPositionPtr tp) : CToken(ttKeyword, vtUndefined, tp), keyword(_keyword), code(keywords[_keyword]) {}
     KeyWords getCode()
     {
         return code;
@@ -140,70 +138,71 @@ public:
     }
 };
 typedef CKeywordToken* CKeywordTokenPtr;
-//DECL_PTR(CKeywordToken);
 
 class CIntConstToken : public CToken
 {
 private:
     int value;
 public:
-    CIntConstToken(int val, CTextPositionPtr tp) : CToken(ttConst, tp), value(val) {}
+    CIntConstToken(int val, CTextPositionPtr tp) : CToken(ttConst, vtInt, tp), value(val) {}
+    VariantType getType() { return vtInt; }
     string ToString()
     {
         return to_string(value);
     }
 };
 typedef CIntConstToken* CIntConstTokenPtr;
-//DECL_PTR(CIntConstToken);
 
 class CRealConstToken : public CToken
 {
 private:
     double value;
 public:
-    CRealConstToken(double val, CTextPositionPtr tp) : CToken(ttConst, tp), value(val) {}
+    CRealConstToken(double val, CTextPositionPtr tp) : CToken(ttConst, vtReal, tp), value(val) {}
+    VariantType getType() { return vtReal; }
     string ToString()
     {
         return to_string(value);
     }
 };
 typedef CRealConstToken* CRealConstTokenPtr;
-//DECL_PTR(CRealConstToken);
 
 class CCharConstToken : public CToken
 {
 private:
     char value;
 public:
-    CCharConstToken(char val, CTextPositionPtr tp) : CToken(ttConst, tp), value(val) {}
+    CCharConstToken(char val, CTextPositionPtr tp) : CToken(ttConst, vtChar, tp), value(val) {}
+    VariantType getType() { return vtChar; }
     string ToString()
     {
         return "" + value;
     }
 };
 typedef CCharConstToken* CCharConstTokenPtr;
-//DECL_PTR(CStringConstToken);
 
 class CBoolConstToken : public CToken
 {
 private:
     bool value;
 public:
-    CBoolConstToken(bool val, CTextPositionPtr tp) : CToken(ttConst, tp), value(val) {}
+    CBoolConstToken(bool val, CTextPositionPtr tp) : CToken(ttConst, vtBoolean, tp), value(val) {}
+    VariantType getType() { return vtBoolean; }
     string ToString()
     {
         return value ? "true" : "false";
     }
 };
 typedef CBoolConstToken* CBoolConstTokenPtr;
-//DECL_PTR(CBoolConstToken);
 
-class CioModule {
+class CIOModule {
 private:
+    ifstream input;
     string buffer;
     int cur_ch;
     int cur_line = 0;
 public:
+    CIOModule(string filename) : input(filename) {}
     tuple<char, CTextPositionPtr> nextch()
     {
         if (cur_ch == buffer.size() && input.eof())
@@ -223,15 +222,20 @@ public:
     {
         cout << "****ERROR " << error << "****   line: " << setw(3) << tp->getLineNumber() << "   symbol position: " << setw(3) << tp->getChNumber() << endl;
     }
+    ~CIOModule()
+    {
+        //cout << endl << "deleting io...";
+        input.close();
+    }
 };
-//DECL_PTR(CioModule);
-auto io = new CioModule();
 
 class CLexer {
 private:
+    CIOModule* io;
     char cur_ch;
     CTextPositionPtr cur_tp;
 public:
+    CLexer(CIOModule* io) : io(io) {}
     CTokenPtr getNextToken()
     {
         CTextPositionPtr token_tp = nullptr;
@@ -243,7 +247,7 @@ public:
 
         while (cur_ch == '\n' || cur_ch == ' ')
             tie(cur_ch, cur_tp) = io->nextch();
-        
+
         string next_t = "";
 
         if (cur_ch >= 'a' && cur_ch <= 'z' ||
@@ -321,25 +325,29 @@ public:
             next_t += cur_ch;
             tie(cur_ch, cur_tp) = io->nextch();
             return new CCharConstToken(next_t[1], token_tp);
-       /* case ';':
-            tie(cur_ch, cur_tp) = io->nextch();
-            return next_t;*/
+            /* case ';':
+                 tie(cur_ch, cur_tp) = io->nextch();
+                 return next_t;*/
 
         default:
             tie(cur_ch, cur_tp) = io->nextch();
             //if (keywords.find(next_t) != keywords.end())
-                return new CKeywordToken(next_t, token_tp);
+            return new CKeywordToken(next_t, token_tp);
         }
 
         //return next_t;
     };
 };
-auto lexer = new CLexer();
+
+map<string, vector<CTokenPtr>> idents;
 
 class CSyntax {
 private:
+    CIOModule* io;
+    CLexer* lexer;
     CTokenPtr curToken;
 public:
+    CSyntax(CIOModule* io, CLexer* lexer) : io(io), lexer(lexer) {}
     int symbol()
     {
         if (curToken->getType() != ttKeyword)
@@ -379,7 +387,7 @@ public:
             auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
             if (kw->getCode() != keyword)
                 io->WriteError((int)keyword, curToken->getTextPosition());
-            else                
+            else
                 curToken = lexer->getNextToken();
             /*if (curToken != nullptr)
                 cout << curToken->ToString() << endl;*/
@@ -397,7 +405,7 @@ public:
         /*if (curToken != nullptr)
             cout << curToken->ToString() << endl;*/
     }
-    void vardeclaration(vector<int> followers)
+    void var_declaration(vector<int> followers)
     {
         if (symbol() != ttIdent)
         {
@@ -407,6 +415,9 @@ public:
         }
         if (symbol() == ttIdent)
         {
+            vector<CTokenPtr> new_idents;
+            new_idents.push_back(curToken);
+
             accept(ttIdent);
             if (curToken->getType() == ttKeyword)
             {
@@ -414,7 +425,11 @@ public:
                 while (kw->getCode() == commaSy)
                 {
                     accept(commaSy);
+
+                    if (curToken->getType() == ttIdent)
+                        new_idents.push_back(curToken);
                     accept(ttIdent);
+
                     if (curToken->getType() == ttKeyword)
                         kw = dynamic_cast<CKeywordTokenPtr>(curToken);
                     else
@@ -422,11 +437,35 @@ public:
                 }
             }
             accept(colonSy);
+
+            VariantType type = vtUndefined;
+
+            if (curToken->getType() == ttIdent)
+            {
+                auto idnt = dynamic_cast<CIdentTokenPtr>(curToken);
+                if (is_type(idnt->ToString()))
+                    type = types[idnt->ToString()];
+                else
+                    //тип не существует
+                    io->WriteError(10, curToken->getTextPosition());
+            }
             accept(ttIdent);
+
+            for (int i = 0; i < new_idents.size(); i++)
+            {
+                new_idents[i]->setVarType(type);
+                string idnt = new_idents[i]->ToString();
+                //повторное объявление
+                if (exists_ident(idnt) && !exists_token(new_idents[i]))
+                    io->WriteError(101, new_idents[i]->getTextPosition());
+
+                idents[idnt].push_back(new_idents[i]);
+            }
+
             skip_to_followers(followers);
         }
     }
-    void varpart(vector<int> followers)
+    void var_part(vector<int> followers)
     {
         if (symbol() != varSy)
         {
@@ -440,7 +479,7 @@ public:
             while (curToken->getType() == ttIdent)
             {
                 vector<int> var_followers = followers; var_followers.push_back(semiColonSy);
-                vardeclaration(var_followers);
+                var_declaration(var_followers);
                 accept(semiColonSy);
             }
 
@@ -455,11 +494,13 @@ public:
     bool is_mult_op()
     {
         auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
-        return kw->getCode() == multSy || kw->getCode() == subSy 
+        return kw->getCode() == multSy || kw->getCode() == subSy
             || kw->getCode() == divSy || kw->getCode() == modSy || kw->getCode() == andSy;
     }
-    void factor(vector<int> followers)
+    VariantType factor(vector<int> followers)
     {
+        VariantType type = vtUndefined;
+
         vector<int> starters = { ttConst, ttIdent, leftBrSy };
         if (!belong(symbol(), starters))
         {
@@ -471,9 +512,19 @@ public:
             switch (curToken->getType())
             {
             case ttConst:
+                type = curToken->getVarType();
                 accept(ttConst);
                 break;
-            case ttIdent:
+            case ttIdent:                
+                //если операнд не существует, добавляем в ТИ
+                if (!exists_ident(curToken->ToString()))
+                {
+                    io->WriteError(104, curToken->getTextPosition());
+                    idents[curToken->ToString()].push_back(curToken);
+                }
+                //берем тип первого вхождения идентификатора
+                type = idents[curToken->ToString()][0]->getVarType();
+
                 accept(ttIdent);
                 break;
             case ttKeyword:
@@ -482,65 +533,128 @@ public:
                 {
                     accept(leftBrSy);
                     vector<int> expr_followers = followers; expr_followers.push_back(rightBrSy);
-                    expr(expr_followers);
+                    type = expr(expr_followers);
                     accept(rightBrSy);
                 }
                 break;
             }
             skip_to_followers(followers);
         }
+        return type;
     }
-    void term(vector<int> followers)
+    VariantType term(vector<int> followers)
     {
         vector<int> factor_followers = followers; factor_followers.insert(factor_followers.end(), { multSy, subSy, divSy, modSy, andSy });
-        factor(factor_followers);
+        VariantType type = factor(factor_followers);
         if (curToken->getType() == ttKeyword && is_mult_op())
         {
             while (curToken->getType() == ttKeyword && is_mult_op())
             {
                 curToken = lexer->getNextToken();
-                factor(factor_followers);
+                VariantType type2 = factor(factor_followers);
+
+                if (type2 == vtUndefined || type == vtUndefined)
+                    type = vtUndefined;
+                else if (type2 != type)
+                {
+                    type = vtUndefined;
+                    //конфликт типов
+                    io->WriteError(145, curToken->getTextPosition());
+                }
             }
         }
         skip_to_followers(followers);
+
+        return type;
     }
-    void simple_expr(vector<int> followers)
+    VariantType simple_expr(vector<int> followers)
     {
         vector<int> term_followers = followers; term_followers.insert(term_followers.end(), { plusSy, minusSy, orSy });
-        term(term_followers);
+        VariantType type = term(term_followers);
         if (curToken->getType() == ttKeyword && is_add_op())
         {
             while (curToken->getType() == ttKeyword && is_add_op())
             {
                 curToken = lexer->getNextToken();
-                term(term_followers);
+                VariantType type2 = term(term_followers);
+
+                if (type2 == vtUndefined || type == vtUndefined)
+                    type = vtUndefined;
+                else if (type2 != type)
+                {
+                    type = vtUndefined;
+                    //конфликт типов
+                    io->WriteError(145, curToken->getTextPosition());
+                }
             }
         }
         skip_to_followers(followers);
+        return type;
     }
     bool is_relation_op()
     {
         auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
         return kw->getCode() == evenSy || kw->getCode() == lessSy
-            || kw->getCode() == lessEvenSy || kw->getCode() == moreSy 
+            || kw->getCode() == lessEvenSy || kw->getCode() == moreSy
             || kw->getCode() == moreEvenSy || kw->getCode() == notEvenSy;
     }
-    void expr(vector<int> followers)
+    VariantType expr(vector<int> followers)
     {
         vector<int> se_followers = followers; se_followers.insert(se_followers.end(), { evenSy, lessSy, lessEvenSy, moreSy, moreEvenSy, notEvenSy });
-        simple_expr(se_followers);
+        VariantType type = simple_expr(se_followers);
         if (curToken->getType() == ttKeyword && is_relation_op())
         {
             curToken = lexer->getNextToken();
-            simple_expr(followers);
+            VariantType type2 = simple_expr(followers);
+
+            if (type2 == vtUndefined || type == vtUndefined)
+                type = vtUndefined;
+            else if (type2 != type)
+            {
+                type = vtUndefined;
+                //конфликт типов
+                io->WriteError(145, curToken->getTextPosition());
+            }
+            else
+                type = vtBoolean;
         }
         skip_to_followers(followers);
+        return type;
     }
-    void assignstatement(vector<int> followers)
+    void assign_statement(vector<int> followers)
     {
+        CTokenPtr cur_token = curToken;
+        //если переменная не существует, добавляем в ТИ
+        if (cur_token->getType() == ttIdent)
+        {
+            if (!exists_ident(cur_token->ToString()))
+            {
+                io->WriteError(104, cur_token->getTextPosition());
+                idents[cur_token->ToString()].push_back(cur_token);
+            }
+        }
         accept(ttIdent);
+
         accept(assignSy);
-        expr(followers);
+        //auto curTp = curToken->getTextPosition();
+        VariantType type2 = expr(followers);
+
+        //получаем тип необъявленного идентификатора из контекста
+        if (idents[cur_token->ToString()][0]->getVarType() == vtUndefined)
+            idents[curToken->ToString()][0]->setVarType(type2);
+
+        //конфликт типов
+        if (idents[cur_token->ToString()][0]->getVarType() != vtUndefined && type2 != vtUndefined 
+            && idents[cur_token->ToString()][0]->getVarType() != type2)
+        {
+            cur_token->setVarType(type2);
+            //если в ТИ не занесен вариант идентификатора с данным ошибочным типом
+            if (!exists_token(cur_token))
+            {
+                io->WriteError(145, cur_token->getTextPosition());
+                idents[cur_token->ToString()].push_back(cur_token);
+            }
+        }
         skip_to_followers(followers);
     }
     void statement(vector<int> followers)
@@ -556,20 +670,20 @@ public:
             switch (curToken->getType())
             {
             case ttIdent:
-                assignstatement(followers);
+                assign_statement(followers);
                 break;
             case ttKeyword:
                 auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
                 switch (kw->getCode())
                 {
                 case beginSy:
-                    compositestatement(followers);
+                    composite_statement(followers);
                     break;
                 case ifSy:
-                    condition(followers);
+                    if_statement(followers);
                     break;
                 case whileSy:
-                    preccycle(followers);
+                    while_statement(followers);
                     break;
                 }
                 break;
@@ -577,7 +691,7 @@ public:
             skip_to_followers(followers);
         }
     }
-    void compositestatement(vector<int> followers)
+    void composite_statement(vector<int> followers)
     {
         if (symbol() != beginSy)
         {
@@ -607,20 +721,34 @@ public:
             skip_to_followers(followers);
         }
     }
-    void preccycle(vector<int> followers)
+    void while_statement(vector<int> followers)
     {
         accept(whileSy);
         vector<int> expr_followers = followers; expr_followers.insert(expr_followers.end(), { doSy, ttIdent, beginSy, ifSy, whileSy });
-        expr(expr_followers);
+        
+        auto curTp = curToken->getTextPosition();
+        VariantType type = expr(expr_followers);
+
+        //неверный тип выражения
+        if (type != vtBoolean)
+            io->WriteError(144, curTp);
+
         accept(doSy);
         statement(followers);
         skip_to_followers(followers);
     }
-    void condition(vector<int> followers)
+    void if_statement(vector<int> followers)
     {
         accept(ifSy);
         vector<int> expr_followers = followers; expr_followers.insert(expr_followers.end(), { thenSy, ttIdent, beginSy, ifSy, whileSy });
-        expr(expr_followers);
+       
+        auto curTp = curToken->getTextPosition();
+        VariantType type = expr(expr_followers);
+
+        //неверный тип выражения
+        if (type != vtBoolean)
+            io->WriteError(144, curTp);
+
         accept(thenSy);
         vector<int> st_followers = followers; st_followers.push_back(elseSy);
         statement(st_followers);
@@ -635,17 +763,17 @@ public:
         }
         skip_to_followers(followers);
     }
-    void statementpart(vector<int> followers)
+    void statement_part(vector<int> followers)
     {
-        compositestatement(followers);
+        composite_statement(followers);
         skip_to_followers(followers);
     }
     void block(vector<int> followers)
     {
         auto var_followers = followers;
         var_followers.push_back(beginSy);
-        varpart(var_followers);
-        statementpart(followers);
+        var_part(var_followers);
+        statement_part(followers);
         skip_to_followers(followers);
     }
     void program()
@@ -671,6 +799,57 @@ public:
         block(followers);
         accept(dotSy);
     }
+
+    //____________________________________семантика_____________________________________________________________________ 
+    bool exists_ident(string ident)
+    {
+        return idents.find(ident) != idents.end();
+    }
+    bool exists_token(CTokenPtr token)
+    {
+        auto idnt = idents[token->ToString()];
+        for (int i = 0; i < idnt.size(); i++)
+        {            
+            if (token->getVarType() == idnt[i]->getVarType())
+                return true;
+        }
+        return false;
+    }
+    bool is_type(string ident)
+    {
+        return types.find(ident) != types.end();
+    }
+    bool is_logical(KeyWords op)
+    {
+        return op == andSy || op == orSy;
+    }
+};
+
+class CCompiler
+{
+private:
+    ifstream input;
+    CIOModule* io;
+    CLexer* lexer;
+    CSyntax* syntax;
+public:
+    CCompiler(string filename)
+    {
+        io = new CIOModule(filename);
+        lexer = new CLexer(io);
+        syntax = new CSyntax(io, lexer);
+    }
+    void compile()
+    {
+        syntax->program();
+    }
+    ~CCompiler()
+    {
+        //cout << endl << "deleting compiler...";
+        delete syntax;
+        delete lexer;
+        delete io;
+    }
 };
 
 int main() {
@@ -695,13 +874,10 @@ int main() {
     }
     fout.close();*/
 
-    auto syntax = new CSyntax();
-    syntax->program();
+    auto compiler = new CCompiler(filename);
+    compiler->compile();
 
-    cout << "d o n e";
+    cout << endl << "d o n e";
 
-    delete io;
-    delete lexer;
-    delete syntax;
-    input.close();
+    delete compiler;
 }
