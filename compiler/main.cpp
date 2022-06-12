@@ -8,7 +8,7 @@
 //#include "compiler.h"
 using namespace std;
 
-string filename = "syntaxerrors.pas";
+string filename = "syn_sem.pas";
 
 enum KeyWords {
     assignSy = 51,
@@ -550,16 +550,32 @@ public:
         {
             while (curToken->getType() == ttKeyword && is_mult_op())
             {
+                KeyWords op = (KeyWords)symbol();
                 curToken = lexer->getNextToken();
+                auto tp = curToken->getTextPosition();
                 VariantType type2 = factor(factor_followers);
 
                 if (type2 == vtUndefined || type == vtUndefined)
                     type = vtUndefined;
                 else if (type2 != type)
                 {
-                    type = vtUndefined;
-                    //конфликт типов
-                    io->WriteError(145, curToken->getTextPosition());
+                    if (!(type == vtInt && type2 == vtReal || type2 == vtInt && type == vtReal))
+                    {
+                        type = vtUndefined;
+                        //конфликт типов
+                        io->WriteError(145, curToken->getTextPosition());
+                    }
+                    else
+                        type = vtReal;
+                }
+                else
+                {
+                    //неприменимые операции
+                    if (type == vtChar || type == vtBoolean && !is_logical(op) || type == vtReal && is_logical(op))
+                    {
+                        type = vtUndefined;
+                        io->WriteError(7331, tp);
+                    }
                 }
             }
         }
@@ -575,16 +591,32 @@ public:
         {
             while (curToken->getType() == ttKeyword && is_add_op())
             {
+                KeyWords op = (KeyWords)symbol();
                 curToken = lexer->getNextToken();
+                auto tp = curToken->getTextPosition();
                 VariantType type2 = term(term_followers);
 
                 if (type2 == vtUndefined || type == vtUndefined)
                     type = vtUndefined;
                 else if (type2 != type)
                 {
-                    type = vtUndefined;
-                    //конфликт типов
-                    io->WriteError(145, curToken->getTextPosition());
+                    if (!(type == vtInt && type2 == vtReal || type2 == vtInt && type == vtReal))
+                    {
+                        type = vtUndefined;
+                        //конфликт типов
+                        io->WriteError(145, curToken->getTextPosition());
+                    }
+                    else
+                        type = vtReal;
+                }
+                else
+                {
+                    //неприменимые операции
+                    if (type == vtChar || type == vtBoolean && !is_logical(op) || type == vtReal && is_logical(op))
+                    {
+                        type = vtUndefined;
+                        io->WriteError(7331, tp);
+                    }
                 }
             }
         }
@@ -613,7 +645,7 @@ public:
             {
                 type = vtUndefined;
                 //конфликт типов
-                io->WriteError(145, curToken->getTextPosition());
+                io->WriteError(186, curToken->getTextPosition());
             }
             else
                 type = vtBoolean;
@@ -641,7 +673,7 @@ public:
 
         //получаем тип необъявленного идентификатора из контекста
         if (idents[cur_token->ToString()][0]->getVarType() == vtUndefined)
-            idents[curToken->ToString()][0]->setVarType(type2);
+            idents[cur_token->ToString()][0]->setVarType(type2);
 
         //конфликт типов
         if (idents[cur_token->ToString()][0]->getVarType() != vtUndefined && type2 != vtUndefined 
