@@ -5,81 +5,10 @@
 #include <fstream>
 #include <iomanip>
 #include <vector>
-//#include "compiler.h"
+#include "tables.h"
 using namespace std;
 
 string filename = "syn_sem.pas";
-
-enum KeyWords {
-    assignSy = 51,
-    beginSy = 17,
-    endSy = 13,
-    evenSy = 16,
-    leftBrSy = 9,
-    rightBrSy = 4,
-    ifSy = 56,
-    thenSy = 52,
-    doSy = 54,
-    colonSy = 5, semiColonSy = 14, commaSy = 20,
-    programSy = 3, dotSy = 61,
-    varSy, andSy, orSy, notSy, lessSy, moreSy, lessEvenSy, moreEvenSy, notEvenSy,
-    plusSy, minusSy, multSy, subSy, divSy, modSy,
-    elseSy,
-    whileSy,
-    quotSy,
-};
-map<string, KeyWords> keywords
-{
-    {"var", varSy},
-    {"begin", beginSy},
-    {"end", endSy},
-    {"and", andSy},
-    {"or", orSy},
-    {"not", notSy},
-    {"=", evenSy},
-    {"<", lessSy},
-    {">", moreSy},
-    {"<=", lessEvenSy},
-    {">=", moreEvenSy},
-    {"<>", notEvenSy},
-    {":=", assignSy},
-    {"+", plusSy},
-    {"-", minusSy},
-    {"*", multSy},
-    {"/", subSy},
-    {"div", divSy},
-    {"mod", modSy},
-    {"(", leftBrSy},
-    {")", rightBrSy},
-    {"if", ifSy},
-    {"then", thenSy},
-    {"else", elseSy},
-    {"while", whileSy},
-    {"do", doSy},
-    {"\"", quotSy},
-    {":", colonSy},
-    {";", semiColonSy},
-    {".", dotSy},
-    {",", commaSy},
-    {"program", programSy}
-};
-enum TokenType {
-    ttIdent = 2,
-    ttKeyword,
-    ttConst
-};
-enum VariantType {
-    vtInt, vtReal, vtChar, vtBoolean, vtUndefined
-};
-map<string, VariantType> types
-{
-    {"integer", vtInt},
-    {"real", vtReal},
-    {"char", vtChar},
-    {"Boolean", vtBoolean}
-};
-
-#define PURE = 0
 
 class CTextPosition {
 private:
@@ -95,6 +24,13 @@ public:
     int getChNumber() { return ch_number; };
 };
 typedef CTextPosition* CTextPositionPtr;
+
+enum TokenType {
+    ttIdent = 2,
+    ttKeyword,
+    ttConst
+};
+#define PURE = 0
 
 class CToken {
 private:
@@ -405,6 +341,7 @@ public:
         /*if (curToken != nullptr)
             cout << curToken->ToString() << endl;*/
     }
+    //<описание однотипных переменных>::=<имя> {,<имя>}:<тип>
     void var_declaration(vector<int> followers)
     {
         if (symbol() != ttIdent)
@@ -465,6 +402,7 @@ public:
             skip_to_followers(followers);
         }
     }
+    //<раздел переменных>::=var<описание однотипных переменных>;{<описание однотипных переменных>;}|<пусто>
     void var_part(vector<int> followers)
     {
         if (symbol() != varSy)
@@ -486,17 +424,20 @@ public:
             skip_to_followers(followers);
         }
     }
+    //<мультипликативная операция>::=*|/|div|mod|and
     bool is_add_op()
     {
         auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
         return kw->getCode() == plusSy || kw->getCode() == minusSy || kw->getCode() == orSy;
     }
+    //<аддитивная операция>::=+|-|or
     bool is_mult_op()
     {
         auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
         return kw->getCode() == multSy || kw->getCode() == subSy
             || kw->getCode() == divSy || kw->getCode() == modSy || kw->getCode() == andSy;
     }
+    //<множитель>::=<переменная>|<константа без знака>|(<выражение>)
     VariantType factor(vector<int> followers)
     {
         VariantType type = vtUndefined;
@@ -542,6 +483,7 @@ public:
         }
         return type;
     }
+    //<слагаемое>::=<множитель>{<мультипликативная операция><множитель>}
     VariantType term(vector<int> followers)
     {
         vector<int> factor_followers = followers; factor_followers.insert(factor_followers.end(), { multSy, subSy, divSy, modSy, andSy });
@@ -583,6 +525,7 @@ public:
 
         return type;
     }
+    //<простое выражение>::=<знак><слагаемое>{<аддитивная операция><слагаемое>}
     VariantType simple_expr(vector<int> followers)
     {
         vector<int> term_followers = followers; term_followers.insert(term_followers.end(), { plusSy, minusSy, orSy });
@@ -623,6 +566,7 @@ public:
         skip_to_followers(followers);
         return type;
     }
+    //<операция отношения>::==|<>|<|<=|>=|>
     bool is_relation_op()
     {
         auto kw = dynamic_cast<CKeywordTokenPtr>(curToken);
@@ -630,6 +574,7 @@ public:
             || kw->getCode() == lessEvenSy || kw->getCode() == moreSy
             || kw->getCode() == moreEvenSy || kw->getCode() == notEvenSy;
     }
+    //<выражение>::=<простое выражение>|<простое выражение><операция отношения><простое выражение>
     VariantType expr(vector<int> followers)
     {
         vector<int> se_followers = followers; se_followers.insert(se_followers.end(), { evenSy, lessSy, lessEvenSy, moreSy, moreEvenSy, notEvenSy });
@@ -653,6 +598,7 @@ public:
         skip_to_followers(followers);
         return type;
     }
+    //<оператор присваивания>::=<переменная>:=<выражение>
     void assign_statement(vector<int> followers)
     {
         CTokenPtr cur_token = curToken;
@@ -689,6 +635,7 @@ public:
         }
         skip_to_followers(followers);
     }
+    //<оператор>::=<оператор присваивания>|<пустой оператор>|<составной оператор>|<условный оператор>|<цикл с предусловием>
     void statement(vector<int> followers)
     {
         vector<int> starters = { ttIdent, beginSy, ifSy, whileSy };
@@ -723,6 +670,7 @@ public:
             skip_to_followers(followers);
         }
     }
+    //<составной оператор>:: = begin<оператор>{ ; <оператор> }end
     void composite_statement(vector<int> followers)
     {
         if (symbol() != beginSy)
@@ -753,6 +701,7 @@ public:
             skip_to_followers(followers);
         }
     }
+    //<цикл с предусловием>::=while<выражение>do<оператор>
     void while_statement(vector<int> followers)
     {
         accept(whileSy);
@@ -769,6 +718,7 @@ public:
         statement(followers);
         skip_to_followers(followers);
     }
+    //<условный оператор> ::= if <выражение> then <оператор>[else<оператор>]
     void if_statement(vector<int> followers)
     {
         accept(ifSy);
@@ -795,11 +745,13 @@ public:
         }
         skip_to_followers(followers);
     }
+    //<раздел операторов>::=<составной оператор>
     void statement_part(vector<int> followers)
     {
         composite_statement(followers);
         skip_to_followers(followers);
     }
+    //<блок>::=<раздел переменных><раздел операторов>
     void block(vector<int> followers)
     {
         auto var_followers = followers;
@@ -808,6 +760,7 @@ public:
         statement_part(followers);
         skip_to_followers(followers);
     }
+    //<программа>::=program<имя>;<блок>.
     void program()
     {
         curToken = lexer->getNextToken();
@@ -884,28 +837,8 @@ public:
     }
 };
 
-int main() {
-    /*CTokenPtr token = nullptr;
-    ofstream fout("output.txt");
-    while (token = lexer->getNextToken())
-    {
-        fout << token->ToString() << "\t";
-        switch (token->getType())
-        {
-        case ttConst:
-            fout << "const" << endl;
-            break;
-        case ttIdent:
-            fout << "ident" << endl;
-            break;
-        case ttKeyword:
-            auto kw = dynamic_cast<CKeywordTokenPtr>(token);
-            fout << (kw->getCode()) << endl;
-            break;
-        }
-    }
-    fout.close();*/
-
+int main() 
+{
     auto compiler = new CCompiler(filename);
     compiler->compile();
 
